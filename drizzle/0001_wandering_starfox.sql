@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS `one_redemption_per_cycle` ON `events` (`card`,`cycle`) WHERE "events"."kind" = 'redeem';

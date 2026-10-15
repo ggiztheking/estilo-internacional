@@ -1,0 +1,10 @@
+import fs from 'node:fs';import path from 'node:path';import assert from 'node:assert/strict';import {createRequire} from 'node:module';
+const require=createRequire(import.meta.resolve('wrangler/package.json'));const {Miniflare}=require('miniflare');
+const modules=[{type:'ESModule',path:path.resolve('dist/server/index.js')},...fs.readdirSync('dist/server',{recursive:true}).filter(f=>/\.(m?js)$/.test(f)&&f!=='index.js').map(f=>({type:'ESModule',path:path.resolve('dist/server',f)}))];
+const mf=new Miniflare({modules,modulesRoot:path.resolve('dist/server'),compatibilityDate:'2026-05-15',compatibilityFlags:['nodejs_compat'],d1Databases:{DB:'artifact-test'},bindings:{OWNER_EMAIL:'owner@test.example'},assets:{directory:path.resolve('dist/client'),routerConfig:{has_user_worker:true,invoke_user_worker_ahead_of_assets:false}}});
+try{const db=await mf.getD1Database('DB');for(const sql of fs.readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort().map(f=>fs.readFileSync('drizzle/'+f,'utf8')).join('\n--> statement-breakpoint\n').split('--> statement-breakpoint').map(s=>s.trim()).filter(Boolean))await db.prepare(sql).run();
+let home=await mf.dispatchFetch('http://localhost/');assert.equal(home.status,200);const html=await home.text();for(const text of ['Elige tu corte','Corte y barba','Corte Fresco','VIP Diamante','9:30 AM','11:00 PM','maps.app.goo.gl/NpfSt23Eorm4wgd37','wa.me/529623295413'])assert.ok(html.includes(text),text);const links=[...html.matchAll(/(?:src|href)="([^"#]+)"/g)].map(x=>x[1]).filter(x=>x.startsWith('/')&&!x.startsWith('//'));for(const url of new Set(links)){const r=await mf.dispatchFetch('http://localhost'+url);assert.equal(r.status,200,url);}
+for(const route of ['/panel','/api/panel','/tarjeta/'+'a'.repeat(64),'/api/tarjeta/'+'a'.repeat(64)]){const r=await mf.dispatchFetch('http://localhost'+route);assert.equal(r.status,404,route);}
+assert.ok(!html.includes('#lealtad'));assert.ok(!html.includes('Acceso del personal'));assert.ok(!html.includes('7 visitas.'));
+console.log('PASS: new package names, homepage links/images/assets, loyalty section removed and all former loyalty routes unavailable.');
+}finally{await mf.dispose()}
